@@ -94,11 +94,11 @@ body.has-results .searchbar #q{font-size:15px;padding:7px 10px;border-width:1px;
 body.has-results .searchbar .primary{font-size:15px;font-weight:600;padding:7px 12px;border-radius:6px}
 body.has-results .chk{display:flex}
 body.has-results .chips,body.has-results .recent{justify-content:flex-start}
-.askstatus{margin-top:8px;padding:16px 20px;border-radius:12px;background:var(--accent-weak);color:var(--accent)}
+.askstatus{margin:8px 0 20px;padding:16px 20px;border-radius:12px;background:var(--accent-weak);color:var(--accent)}
 .askstatus.err{background:none;border:1px solid var(--err);color:var(--err)}
 .summary{background:var(--brown-weak);border:1px solid transparent;border-radius:12px;padding:18px 22px;font-size:16px;line-height:1.75;color:var(--sub);margin-bottom:10px}
 .summary b{display:block;font-size:13px;color:var(--brown);margin-bottom:4px}
-.summary p{margin:0}.summary .meta{margin-top:8px;font-size:13px;line-height:1.5}
+.summary p{margin:0}.summary b.eff{margin-top:14px}.summary .meta{margin-top:8px;font-size:13px;line-height:1.5}
 .need{margin-top:40px}
 .need h2{display:flex;align-items:center;gap:10px;margin:0 0 4px;font-size:20px}
 .need>p.muted:first-of-type{color:var(--brown);margin:0 0 14px 38px}
@@ -166,11 +166,11 @@ function card(x){
   return c}
 function render(r){
   const sc=$("scenarios"),rc=$("recs");sc.textContent="";rc.textContent="";
-  const titles={};r.recommendations.forEach(x=>titles[x.id]=x.display);
   const s1=el("section","need"),h1=el("h2");h1.append(el("span","idx","1"),"활용 시나리오");s1.append(h1);
   if(!r.scenarios.length)s1.append(el("p","gap","시나리오를 만들지 못했습니다. 아래 추천 목록을 확인하세요."));
-  r.scenarios.forEach(s=>{const c=el("div","summary");c.append(el("b",null,s.title),el("p",null,s.description),
-    el("p","meta","사용 데이터: "+s.data_ids.map(i=>titles[i]?titles[i]+"("+i+")":i).join(", ")));s1.append(c)});
+  r.scenarios.forEach(s=>{const c=el("div","summary");c.append(el("b",null,s.title),el("p",null,s.description));
+    if(s.effect)c.append(el("b","eff","기대 효과"),el("p",null,s.effect));
+    s1.append(c)});
   sc.append(s1);
   const list=$("apiOnly").checked?r.recommendations.filter(x=>x.list_type==="OPEN API"):r.recommendations;
   const s2=el("section","need"),h2=el("h2");h2.append(el("span","idx","2"),"추천 목록 ("+list.length+"건)");s2.append(h2);

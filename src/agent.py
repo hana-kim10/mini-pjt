@@ -187,7 +187,8 @@ class Selection(BaseModel):
 class Scenario(BaseModel):
     """활용 시나리오 한 건."""
     title: str = Field(description="시나리오 제목")
-    description: str = Field(description="추천 데이터를 어떻게 엮어 쓰는지 구체적 설명 (3~4문장, 합니다체)")
+    description: str = Field(description="이 데이터를 어떤 상황에서 쓰는지 (2문장, 합니다체). '~할 때 쓸 수 있습니다.'로 시작해 구체적인 예(지역·기간·지표)를 들고 '~할 때 유용합니다.'로 맺음")
+    effect: str = Field(description="기대 효과 (2~3문장, 합니다체). 이 데이터로 무엇을 판단·확인할 수 있고 어디에 근거로 삼을 수 있는지")
     data_ids: list[str] = Field(description="이 시나리오에 쓰는 추천 데이터 ID")
 
 
@@ -283,9 +284,11 @@ def make_scenarios(question: str, recs: list[dict], llm: Any) -> list[dict]:
         "사용자 목적: {q}\n\n추천 데이터(ID | 유형 | 이름 | 기관 | 설명):\n{listing}\n\n"
         "위 추천 데이터만 근거로 사용자가 이 데이터를 어떻게 엮어 쓸 수 있는지 활용 시나리오 1~2개를 쓰세요. "
         "각 시나리오는 어떤 데이터로 무엇을 확인·비교하고 어떤 결과를 얻는지 구체적으로 설명하고, 목록에 없는 데이터는 언급하지 마세요. "
-        "문체: 제목은 짧은 명사구로 쓰고, 설명은 '~합니다', '~할 수 있습니다' 같은 격식 있는 합니다체로 3~4문장만 쓰세요. "
-        "첫 문장에 이 데이터로 얻는 핵심 가치를 한 줄로 먼저 말하고, 이어서 비교·분석할 구체적인 항목(기간, 지역, 지표 등)을 예로 드세요. "
-        "설명 본문에는 데이터 ID나 괄호 속 번호를 쓰지 마세요(사용 데이터는 화면에 따로 표시됩니다). "
+        "각 시나리오는 제목(짧은 명사구), 설명(description), 기대 효과(effect) 세 부분으로 쓰고 모두 격식 있는 합니다체로 쓰세요. "
+        "설명은 정확히 2문장입니다. 첫 문장은 '관심 지역의 아파트 가격이 시간에 따라 어떻게 변하는지 궁금할 때 쓸 수 있습니다.'처럼 "
+        "이 데이터를 어떤 상황에서 쓰는지 쓰고, 둘째 문장은 구체적인 예(지역, 기간, 지표)를 들어 '~하고 싶을 때 유용합니다.'로 맺으세요. "
+        "기대 효과는 2~3문장입니다. 이 데이터로 무엇을 판단·확인할 수 있는지, 그 결과를 어디에 근거로 삼을 수 있는지 쓰세요. "
+        "설명과 기대 효과 본문에는 데이터 ID나 괄호 속 번호를 쓰지 마세요. "
         "data_ids 에는 목록의 ID만 쓰세요. 질문이 실시간·잔여 좌석처럼 목록에 없는 성격의 데이터를 요구하면 "
         "그런 데이터는 추천 목록에 없다고 시나리오 설명에서 먼저 밝히고, 목록의 대체 데이터로 할 수 있는 일만 쓰세요."
     ) | build_llm(llm).with_structured_output(ScenarioSet)
@@ -298,7 +301,7 @@ def make_scenarios(question: str, recs: list[dict], llm: Any) -> list[dict]:
     for s in out:
         ids = [i for i in s.data_ids if i in valid]
         if ids and s.description.strip():
-            scen.append({"title": s.title, "description": s.description, "data_ids": ids})
+            scen.append({"title": s.title, "description": s.description, "effect": s.effect, "data_ids": ids})
     return scen
 
 
