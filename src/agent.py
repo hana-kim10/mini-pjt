@@ -83,7 +83,9 @@ REFUSAL_MESSAGES = {
     "guard_error": "일시적인 오류로 요청을 검사하지 못했습니다. 잠시 후 다시 시도해 주세요.",
 }
 NO_ANSWER_MESSAGE = "질문과 관련된 공공데이터를 포털에서 찾지 못했습니다. 다른 표현이나 키워드로 다시 물어봐 주세요."
-SCENARIO_ERROR_MESSAGE = "일시적인 오류로 활용 시나리오를 만들지 못했습니다. 잠시 후 다시 검색해 주세요. 추천 목록은 아래에서 확인할 수 있습니다."
+SEARCH_ERROR_MESSAGE = "일시적인 오류로 검색하지 못했습니다. 잠시 후 다시 시도해 주세요."
+SEARCH_DEGRADED_NOTICE = "일시적인 오류로 검색어 확장·재선별을 하지 못해 입력하신 문장 그대로 간단히 검색한 결과입니다. 잠시 후 다시 검색하면 더 정확한 결과를 볼 수 있습니다."
+SCENARIO_ERROR_MESSAGE ="일시적인 오류로 활용 시나리오를 만들지 못했습니다. 잠시 후 다시 검색해 주세요. 추천 목록은 아래에서 확인할 수 있습니다."
 
 
 class GuardCheck(BaseModel):
@@ -211,11 +213,15 @@ AGENT_PROMPT = (
 # ---------------------------------------------------------------- 단계 함수
 
 
-def collect_candidates(question: str, llm: Any, tracer: FileTracer, trace: list) -> list[dict]:
-    """create_agent 가 검색어를 확장해 도구를 병렬 호출한 결과를 모읍니다. 부족하면 재확장(최대 MAX_ATTEMPTS)합니다."""
+def collect_candidates(question: str, llm: Any, tracer: FileTracer, trace: list) -> tuple[list[dict], bool]:
+    """create_agent 가 검색어를 확장해 도구를 병렬 호출한 결과를 모읍니다. 부족하면 재확장(최대 MAX_ATTEMPTS)합니다.
+
+    (후보 목록, 에이전트 실패 여부)를 돌려줍니다. 에이전트(LLM) 호출이 실패하면 검색어 확장 없이 입력 문장으로 직접 검색합니다.
+    """
     region = ", ".join(extract_regions(question))
     cands: dict[str, dict] = {}
     seen_titles: set[str] = set()
+    failed = False
     try:
         agent = create_agent(build_llm(llm), get_domain_tools(), system_prompt=AGENT_PROMPT)
         for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -237,17 +243,22 @@ def collect_candidates(question: str, llm: Any, tracer: FileTracer, trace: list)
             trace.append({"step": f"search_attempt_{attempt}", "input": question, "output": f"후보 {len(cands)}건"})
             if len(cands) >= MIN_CANDIDATES:
                 break
-    except Exception as e:  # 에이전트 실패 시 직접 검색으로 대체
+    except Exception as e:  # 에이전트 실패 시 직접 검색으로 대체하고, 실패 사실은 호출한 쪽에서 사용자에게 알립니다
+        failed = True
+        print(f"[search] 검색어 확장 실패: {type(e).__name__}: {str(e)[:150]}")
         trace.append({"step": "agent_error", "input": question, "output": f"{type(e).__name__}: {str(e)[:200]}"})
     if not cands:
         for it in search_candidates(question, question):
             cands.setdefault(it["id"], it)
         trace.append({"step": "keyword_fallback", "input": question, "output": f"후보 {len(cands)}건"})
-    return list(cands.values())
+    return list(cands.values()), failed
 
 
-def rerank(question: str, cands: list[dict], llm: Any) -> list[dict]:
-    """LLM 이 후보에서 상위 TOP_N 을 재선별합니다. 오픈API·파일데이터가 둘 다 있으면 둘 다 포함시킵니다."""
+def rerank(question: str, cands: list[dict], llm: Any) -> tuple[list[dict], bool]:
+    """LLM 이 후보에서 상위 TOP_N 을 재선별합니다. 오픈API·파일데이터가 둘 다 있으면 둘 다 포함시킵니다.
+
+    (추천 목록, 재선별 실패 여부)를 돌려줍니다. LLM 호출이 실패하면 검색 순서대로 채웁니다.
+    """
     pool = cands[:30]
     listing = "\n".join(
         f"{c['id']} | {'API' if c['list_type'] == 'OPEN API' else '파일'} | {c['display']} | {c['org_nm']} | "
@@ -257,10 +268,12 @@ def rerank(question: str, cands: list[dict], llm: Any) -> list[dict]:
         "목적 달성에 필요한 서로 다른 유형의 데이터가 상위에 오도록 최대 5개의 ID를 골라 중요도 순으로 답하세요. "
         "후보에 있는 ID만 쓰세요."
     ) | build_llm(llm).with_structured_output(Selection)
+    failed = False
     try:
         ids = [str(i) for i in chain.invoke({"q": question, "listing": listing}).ids]
-    except Exception:
-        ids = []
+    except Exception as e:
+        print(f"[search] 재선별 실패: {type(e).__name__}: {str(e)[:150]}")
+        ids, failed = [], True
     by_id = {c["id"]: c for c in pool}
     picked = [by_id[i] for i in dict.fromkeys(ids) if i in by_id][:TOP_N]
     for c in pool:  # 부족하면 검색 순서대로 채움
@@ -273,7 +286,7 @@ def rerank(question: str, cands: list[dict], llm: Any) -> list[dict]:
             extra = next((c for c in pool if (c["list_type"] == "OPEN API") == want_api), None)
             if extra:
                 picked[-1] = extra
-    return picked
+    return picked, failed
 
 
 def make_scenarios(question: str, recs: list[dict], llm: Any) -> tuple[list[dict], bool]:
@@ -329,22 +342,28 @@ def run_agent(question: str, llm: Any = None) -> dict:
         return {"answer": refusal_message(reason), "contexts": [], "trace": trace}
 
     tracer = FileTracer(os.getenv("TRACE_FILE") or None)
-    cands = collect_candidates(question, llm, tracer, trace)
+    cands, search_failed = collect_candidates(question, llm, tracer, trace)
     trace += tracer.records
     if not cands:
-        trace.append({"step": "no_answer", "input": question, "output": "근거 후보 없음"})
-        return {"answer": NO_ANSWER_MESSAGE, "contexts": [], "trace": trace}
+        # 호출 오류(한도 초과 등)로 아무것도 못 찾은 것과 포털에 정말 없는 것을 구분해서 안내합니다
+        trace.append({"step": "no_answer", "input": question,
+                      "output": "검색 호출 오류" if search_failed else "근거 후보 없음"})
+        return {"answer": SEARCH_ERROR_MESSAGE if search_failed else NO_ANSWER_MESSAGE, "contexts": [], "trace": trace}
 
-    recs = output_guard(rerank(question, cands, llm))
-    trace.append({"step": "rerank", "input": f"후보 {len(cands)}건", "output": ", ".join(c["id"] for c in recs)})
+    picked, rerank_failed = rerank(question, cands, llm)
+    recs = output_guard(picked)
+    trace.append({"step": "rerank", "input": f"후보 {len(cands)}건",
+                  "output": ("재선별 실패(검색 순서 사용): " if rerank_failed else "") + ", ".join(c["id"] for c in recs)})
     if not recs:
         trace.append({"step": "no_answer", "input": question, "output": "출력 가드 통과 항목 없음"})
-        return {"answer": NO_ANSWER_MESSAGE, "contexts": [], "trace": trace}
+        return {"answer": SEARCH_ERROR_MESSAGE if (search_failed or rerank_failed) else NO_ANSWER_MESSAGE,
+                "contexts": [], "trace": trace}
     scenarios, scenario_failed = make_scenarios(question, recs, llm)
     trace.append({"step": "scenario", "input": f"추천 {len(recs)}건",
                   "output": "생성 실패(LLM 호출 오류)" if scenario_failed else f"시나리오 {len(scenarios)}개"})
 
     answer = json.dumps({"scenarios": scenarios, "scenario_notice": SCENARIO_ERROR_MESSAGE if scenario_failed else "",
+                         "search_notice": SEARCH_DEGRADED_NOTICE if (search_failed or rerank_failed) else "",
                          "recommendations": recs, "search_mode": search_mode()}, ensure_ascii=False)
     contexts = [{"doc_id": r["id"],
                  "text": f"{r['display']} [{r['list_type']}] {r['org_nm']} | {r['keywords']} | {r['summary']} | {r['page_url']}"}
