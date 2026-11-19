@@ -1,0 +1,20 @@
+{
+  "portal": {
+    "file": "portal__20261113_130401.duckdb",
+    "version": "20261113_130401",
+    "rows": 103237,
+    "source": "data\\portal\\dataset.csv",
+    "ingested_at": "2026-11-13T13:04:05",
+    "seconds": 4.67,
+    "config_mtime": 1794542640.702975
+  },
+  "portal_api": {
+    "file": "portal_api__20261113_180136.duckdb",
+    "version": "20261113_180136",
+    "rows": 17096,
+    "source": "data\\portal\\openapi.csv",
+    "ingested_at": "2026-11-13T18:01:36",
+    "seconds": 0.38,
+    "config_mtime": 1794560495.980349
+  }
+}

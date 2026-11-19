@@ -1,0 +1,14 @@
+{
+  "top5_type_hit": 0.792,
+  "hallucinated": 0,
+  "judge_avg": 4.68,
+  "judge_runs": [
+    4.66,
+    4.69
+  ],
+  "reject_rate": 1.0,
+  "overall_pass": 0.833,
+  "n_cases": 60,
+  "n_passed": 50,
+  "search_mode": "hybrid"
+}

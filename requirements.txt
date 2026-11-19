@@ -1,0 +1,11 @@
+fastapi>=0.115
+uvicorn>=0.30
+pydantic>=2.12
+python-dotenv>=1.0
+httpx>=0.27  # FastAPI TestClient 용
+langchain>=1.0  # create_agent (langchain.agents)
+langgraph>=1.0
+langchain-aws>=1.0  # ChatBedrockConverse
+chromadb>=1.0
+ragas>=0.3
+duckdb>=1.0

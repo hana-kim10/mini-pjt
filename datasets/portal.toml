@@ -1,0 +1,92 @@
+# 공공데이터포털 전체 목록 (python manage.py fetch-portal 로 수집, 약 10만 건)
+name = "portal"
+title = "공공데이터포털 전체 목록"
+description = "공공데이터포털(data.go.kr)에 개방된 전체 데이터셋. 제목·설명·키워드로 검색하고 분야/유형/기관으로 필터링합니다."
+page_size = 50
+order_by = ["new_category_nm", "list_type", "category_nm"]
+default_sort = "download_cnt"
+default_desc = true
+
+[source]
+path = 'data/portal/dataset.csv'
+encoding = "utf-8"
+delimiter = ","
+
+[[columns]]
+name = "title"
+label = "데이터명"
+search = true
+
+[[columns]]
+name = "new_category_nm"
+label = "분야"
+filter = "select"
+
+[[columns]]
+name = "category_nm"
+label = "세부분류"
+filter = "select"
+
+[[columns]]
+name = "list_type"
+label = "유형"
+filter = "select"
+
+[[columns]]
+name = "org_nm"
+label = "제공기관"
+search = true
+
+[[columns]]
+name = "download_cnt"
+label = "다운로드·활용신청"
+type = "int"
+filter = "range"
+
+[[columns]]
+name = "view_cnt"
+label = "조회수"
+type = "int"
+list = false
+
+[[columns]]
+name = "updated_at"
+label = "수정일"
+type = "date"
+date_format = "%Y-%m-%d"
+filter = "range"
+
+[[columns]]
+name = "created_at"
+label = "등록일"
+type = "date"
+date_format = "%Y-%m-%d"
+list = false
+
+[[columns]]
+name = "keywords"
+label = "키워드"
+search = true
+list = false
+
+[[columns]]
+name = "ext"
+label = "형식"
+list = false
+
+[[columns]]
+name = "page_url"
+label = "포털 페이지"
+list = false
+
+[[columns]]
+name = "id"
+label = "목록 ID"
+list = false
+
+[[columns]]
+name = "summary"
+label = "설명"
+search = true
+list = false
+expr = '''trim(regexp_replace(regexp_replace("desc", '<br\s*/?>', ' ', 'g'), '\s+', ' ', 'g'))'''

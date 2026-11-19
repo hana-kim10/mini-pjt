@@ -1,0 +1,58 @@
+# 공공데이터포털 오픈API 상세 (python manage.py fetch-portal 로 수집, 오퍼레이션 1행씩 약 1.7만 건)
+# 길잡이가 추천 카드의 제공 기능·데이터 형식·승인 방식을 붙일 때 list_id 로 portal 과 연결한다.
+name = "portal_api"
+title = "공공데이터포털 오픈API 상세"
+description = "오픈API의 오퍼레이션(제공 기능) 단위 목록. 데이터 형식과 활용 승인 방식을 담고 있습니다."
+page_size = 50
+order_by = ["list_id"]
+
+[source]
+path = 'data/portal/openapi.csv'
+encoding = "utf-8"
+delimiter = ","
+
+[[columns]]
+name = "list_title"
+label = "데이터명"
+search = true
+
+[[columns]]
+name = "operation_nm"
+label = "제공 기능"
+search = true
+
+[[columns]]
+name = "org_nm"
+label = "제공기관"
+search = true
+
+[[columns]]
+name = "data_format"
+label = "데이터 형식"
+filter = "select"
+
+[[columns]]
+name = "is_confirmed_for_dev_nm"
+label = "승인 방식"
+filter = "select"
+
+[[columns]]
+name = "list_id"
+label = "목록 ID"
+list = false
+
+# 데이터 작업실 "API로 가져오기"에서 오퍼레이션을 검색해 주소·파라미터를 채울 때 쓴다
+[[columns]]
+name = "operation_url"
+label = "호출 주소"
+list = false
+
+[[columns]]
+name = "request_param_nm_en"
+label = "요청 파라미터"
+list = false
+
+[[columns]]
+name = "request_param_nm"
+label = "요청 파라미터 설명"
+list = false
