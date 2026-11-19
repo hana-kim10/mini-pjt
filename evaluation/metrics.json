@@ -1,16 +1,31 @@
 {
-  "top5_type_hit": 0.887,
+  "top5_type_hit": 0.838,
   "hallucinated": 0,
-  "judge_avg": 4.55,
+  "judge_avg": 4.47,
   "judge_runs": [
-    4.55,
-    4.55
+    4.48,
+    4.47
   ],
   "reject_rate": 1.0,
-  "overall_pass": 0.85,
+  "overall_pass": 0.8,
   "n_cases": 100,
-  "n_passed": 85,
+  "n_passed": 80,
   "search_mode": "hybrid",
+  "note": "rerank 변경 후 코드로 측정. 100건을 여러 실행·리전에서 나눠 돌려 합친 값(코드·모델·채점 동일)",
+  "before_rerank_change": {
+    "top5_type_hit": 0.887,
+    "hallucinated": 0,
+    "judge_avg": 4.55,
+    "judge_runs": [
+      4.55,
+      4.55
+    ],
+    "reject_rate": 1.0,
+    "overall_pass": 0.85,
+    "n_cases": 100,
+    "n_passed": 85,
+    "search_mode": "hybrid"
+  },
   "keyword_only": {
     "top5_type_hit": 0.809,
     "hallucinated": 0,
@@ -22,6 +37,7 @@
     "reject_rate": 1.0,
     "overall_pass": 0.8,
     "n_cases": 100,
-    "n_passed": 80
+    "n_passed": 80,
+    "note": "rerank 변경 전 코드로 측정한 값이라 위 하이브리드와 직접 비교할 수 없음"
   }
 }

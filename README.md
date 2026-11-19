@@ -66,7 +66,7 @@ curl -X POST http://127.0.0.1:8000/query -H "Content-Type: application/json" -d 
 - 현재 평가 수치(`evaluation/metrics.json`)는 `search_mode=hybrid`(로컬 전체 인덱스 103,237건) 기준이다. 키워드 검색만으로 측정한 값은 `evaluation/round2_report.md`에 함께 있다.
 
 ## RAGAS 평가 결과
-이번 실행에서는 측정하지 않았다(미측정). 대신 LLM-as-Judge(시나리오 1~5점, 2회 평균 4.55)와 유형 적중률로 평가했다. 상세는 `evaluation/metrics.json`, `evaluation/round2_report.md`.
+이번 실행에서는 측정하지 않았다(미측정). 대신 LLM-as-Judge(시나리오 1~5점, 2회 평균 4.47)와 유형 적중률로 평가했다. 상세는 `evaluation/metrics.json`, `evaluation/round2_report.md`.
 
 ## 평가셋
 - `evaluation/test_queries.csv` — 인-아웃 세트 (최소 10건 · positive/negative/edge/guardrail). 현재 100건
@@ -79,15 +79,17 @@ curl -X POST http://127.0.0.1:8000/query -H "Content-Type: application/json" -d 
 - 2차 (Day 10 개선 후, 키워드 검색): 51 / 60 통과 (0.85)
 - 개선폭: +6 건 (주요 개선 사항: PII 마스킹 후 차단, 시나리오에서 부재 데이터 명시, 검색어 유형 확장)
 - 하이브리드 재측정 (2026-11-19, 60건): 50 / 60 통과 (0.833). 키워드 검색 대비 나아졌다는 증거는 없었다
-- 100건 재측정 (2026-11-19, 평가셋 확대 · 최신 코드): 키워드 전용 80 / 100 (0.80), 하이브리드 85 / 100 (0.85). 기존 edge(오타·영어·막연한 표현)에서 5 → 9건으로 앞섰고 새 문장형·일상어·정확형 질문에서는 차이가 없었다. 1회씩 측정이고 LLM 판정이라 경향 수준이다
-- 지표(하이브리드, 100건): top5_type_hit 0.887 · hallucinated 0 · judge_avg 4.55 · reject_rate 1.0 · overall_pass 0.85
-- 지표(키워드 전용, 100건): top5_type_hit 0.809 · hallucinated 0 · judge_avg 4.47 · reject_rate 1.0 · overall_pass 0.80
+- 100건 재측정 (2026-11-19, 평가셋 확대 · rerank 변경 전 코드): 키워드 전용 80 / 100 (0.80), 하이브리드 85 / 100 (0.85). 기존 edge(오타·영어·막연한 표현)에서 5 → 9건으로 앞섰고 새 문장형·일상어·정확형 질문에서는 차이가 없었다. 1회씩 측정이고 LLM 판정이라 경향 수준이다
+- rerank 변경 후 재측정 (2026-11-19, 하이브리드, 100건): 80 / 100 (0.80) · positive 43/60 · edge 8/11 · negative 7/7 · guardrail 22/22. 입력 가드·검색·판정 호출 오류 0건. 한도 때문에 100건을 여러 실행·리전(us-east-1, us-west-2, ap-northeast-2)에 나눠 돌려 합친 값이다(코드·모델·채점은 같다)
+- 지표(하이브리드, rerank 변경 후, 100건): top5_type_hit 0.838 · hallucinated 0 · judge_avg 4.47 · reject_rate 1.0 · overall_pass 0.80
+- 지표(하이브리드, rerank 변경 전, 100건): top5_type_hit 0.887 · hallucinated 0 · judge_avg 4.55 · reject_rate 1.0 · overall_pass 0.85. 변경 후 positive가 4건·edge가 1건 줄었지만 같은 방식도 ±4건 흔들려 변경 때문이라고 단정할 수 없다
+- 지표(키워드 전용, rerank 변경 전, 100건): top5_type_hit 0.809 · hallucinated 0 · judge_avg 4.47 · reject_rate 1.0 · overall_pass 0.80
 - 지표(2차 키워드): top5_type_hit 0.842 · hallucinated 0 · judge_avg 4.86 · reject_rate 1.0 · overall_pass 0.85
 
 ## 트라이앤에러 회고
 - 시도했지만 실패한 접근 · 왜 실패했는가: 목적 문장을 그대로 키워드 검색하면 데이터 이름이 들어 있지 않아 결과가 비었다(1차 positive 55%). 또한 사본을 묶지 않으면 상위가 같은 유형의 지자체 사본으로 채워졌다.
 - 최종 채택한 접근 · 왜 그것으로 갔는가: 에이전트가 검색어를 유형어·기관명으로 3~4묶음 확장해 도구를 병렬 호출하고, 사본 묶기 후 LLM이 재선별한다. 후보가 부족하면 최대 2회 재확장한다. 그 결과 top5_type_hit 0.746 → 0.842.
-- 남은 한계 · 향후 개선 방향: 벡터 검색(`build_index`, Titan v2/Chroma 하이브리드)은 에이전트 도구에 연결했고 하이브리드로 다시 측정했다. 60건 측정에서는 나아졌다는 증거가 없었고(0.85 → 0.833), 100건 측정에서는 0.80 → 0.85로 앞섰지만 새 질문 유형에서는 차이가 없어 경향 수준이다. RAGAS는 측정하지 않았다. 입력 가드가 정상 질문(소아청소년과 개원)을 거절하는 오탐과 일부 지자체 사본 묶기 누락이 남아 있다. edge 케이스 통과율은 82%(9/11). 2차 목표인 "분석 단계별 데이터 지도"(상권 분석 → 입지 → 인허가)
+- 남은 한계 · 향후 개선 방향: 벡터 검색(`build_index`, Titan v2/Chroma 하이브리드)은 에이전트 도구에 연결했고 하이브리드로 다시 측정했다. 60건 측정에서는 나아졌다는 증거가 없었고(0.85 → 0.833), 100건 측정(rerank 변경 전)에서는 0.80 → 0.85로 앞섰지만 새 질문 유형에서는 차이가 없어 경향 수준이다. rerank 변경 후 하이브리드는 0.80(80/100)이다. RAGAS는 측정하지 않았다. 입력 가드가 정상 질문(소아청소년과 개원)을 거절하는 오탐과 일부 지자체 사본 묶기 누락이 남아 있다. edge 케이스 통과율은 73%(8/11). 2차 목표인 "분석 단계별 데이터 지도"(상권 분석 → 입지 → 인허가)
 
 ## 핵심 코드 위치
 - `app.py` — POST /query 진입점, 웹 화면
