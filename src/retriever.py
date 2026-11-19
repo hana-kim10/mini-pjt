@@ -146,10 +146,16 @@ def _group_index() -> dict[str, list[int]]:
     return idx
 
 
+_JOSA = "에서|에게|으로|에|의|로|와|과|은|는|이|가|을|를|도|만"
+
+
 def extract_regions(question: str) -> list[str]:
     """질문에서 지역명(광역 접두 또는 ○○시·군·구)을 뽑습니다. 없으면 빈 리스트."""
-    found = [r for r in REGION_PREFIXES if r in question]
-    found += [t for t in re.findall(r"[가-힣]{2,}(?:시|군|구)(?![가-힣])", question) if t not in found]
+    # 광역 접두는 단어 앞에서만 인정한다('해운대구'에서 '대구'를 뽑지 않기 위함).
+    found = [r for r in REGION_PREFIXES if re.search(rf"(?<![가-힣]){r}", question)]
+    # ○○시·군·구 뒤에는 조사('강남구에서')가 올 수 있다. 그 밖의 한글이 이어지면 다른 낱말로 본다.
+    found += [t for t in re.findall(rf"([가-힣]{{2,}}?(?:시|군|구))(?![가-힣])|([가-힣]{{2,}}?(?:시|군|구))(?={_JOSA})", question)
+              for t in t if t and t not in found]
     return found
 
 
@@ -181,6 +187,11 @@ def group_by_type(rows: list[dict], question: str = "", limit: int = 10) -> list
             m = members[members.apply(lambda x: any(g in str(x["org_nm"]) or g in str(x["title"]) for g in regions), axis=1)]
             if not m.empty:
                 pick = m
+                # 질문에 구·군·시 이름이 있으면 광역 단위('서울특별시') 사본보다 그 지역 사본을 우선한다.
+                fine = [g for g in regions if g not in REGION_PREFIXES]
+                m2 = m[m.apply(lambda x: any(g in str(x["org_nm"]) or g in str(x["title"]) for g in fine), axis=1)] if fine else m
+                if not m2.empty:
+                    pick = m2
         if pick is None:
             nat = members[~local | members["title"].str.contains("전국", na=False)]
             pick = nat if not nat.empty else members

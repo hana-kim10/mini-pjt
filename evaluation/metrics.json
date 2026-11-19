@@ -1,17 +1,32 @@
 {
-  "top5_type_hit": 0.838,
+  "top5_type_hit": 0.876,
   "hallucinated": 0,
-  "judge_avg": 4.47,
+  "judge_avg": 4.58,
   "judge_runs": [
-    4.48,
-    4.47
+    4.58,
+    4.58
   ],
   "reject_rate": 1.0,
-  "overall_pass": 0.8,
+  "overall_pass": 0.84,
   "n_cases": 100,
-  "n_passed": 80,
+  "n_passed": 84,
   "search_mode": "hybrid",
-  "note": "rerank 변경 후 코드로 측정. 100건을 여러 실행·리전에서 나눠 돌려 합친 값(코드·모델·채점 동일)",
+  "note": "지역 처리 수정 후 코드로 측정. 100건 모두 같은 코드로 측정했고, 한도 때문에 키 2개·리전 3곳(us-east-1, us-west-2, ap-northeast-2)에 나눠 돌려 합친 값(코드·모델·채점 동일)",
+  "before_region_fix": {
+    "top5_type_hit": 0.838,
+    "hallucinated": 0,
+    "judge_avg": 4.47,
+    "judge_runs": [
+      4.48,
+      4.47
+    ],
+    "reject_rate": 1.0,
+    "overall_pass": 0.8,
+    "n_cases": 100,
+    "n_passed": 80,
+    "search_mode": "hybrid",
+    "note": "rerank 변경 후 코드로 측정. 100건을 여러 실행·리전에서 나눠 돌려 합친 값(코드·모델·채점 동일)"
+  },
   "before_rerank_change": {
     "top5_type_hit": 0.887,
     "hallucinated": 0,
