@@ -255,9 +255,10 @@ def collect_candidates(question: str, llm: Any, tracer: FileTracer, trace: list)
 
 
 def rerank(question: str, cands: list[dict], llm: Any) -> tuple[list[dict], bool]:
-    """LLM 이 후보에서 상위 TOP_N 을 재선별합니다. 오픈API·파일데이터가 둘 다 있으면 둘 다 포함시킵니다.
+    """LLM 이 후보에서 상위 TOP_N 을 재선별합니다. 질문과 관련 있는 후보만 고르고, 오픈API·파일데이터가 둘 다 관련 있으면 둘 다 포함합니다.
 
-    (추천 목록, 재선별 실패 여부)를 돌려줍니다. LLM 호출이 실패하면 검색 순서대로 채웁니다.
+    (추천 목록, 재선별 실패 여부)를 돌려줍니다. 관련 없는 후보로 5건을 억지로 채우지 않습니다.
+    LLM 호출이 실패했을 때만 검색 순서대로 채우고 유형을 섞습니다.
     """
     pool = cands[:30]
     listing = "\n".join(
@@ -266,6 +267,8 @@ def rerank(question: str, cands: list[dict], llm: Any) -> tuple[list[dict], bool
     chain = ChatPromptTemplate.from_template(
         "사용자 목적: {q}\n\n후보 목록(ID | 유형 | 이름 | 기관 | 키워드 | 설명):\n{listing}\n\n"
         "목적 달성에 필요한 서로 다른 유형의 데이터가 상위에 오도록 최대 5개의 ID를 골라 중요도 순으로 답하세요. "
+        "오픈API와 파일데이터가 모두 질문과 관련 있으면 둘 다 포함하세요. "
+        "질문과 관련 없는 후보는 5개를 채우려고 고르지 말고, 관련 있는 것만 고르세요(관련 있는 후보가 없으면 빈 목록). "
         "후보에 있는 ID만 쓰세요."
     ) | build_llm(llm).with_structured_output(Selection)
     failed = False
@@ -276,12 +279,14 @@ def rerank(question: str, cands: list[dict], llm: Any) -> tuple[list[dict], bool
         ids, failed = [], True
     by_id = {c["id"]: c for c in pool}
     picked = [by_id[i] for i in dict.fromkeys(ids) if i in by_id][:TOP_N]
-    for c in pool:  # 부족하면 검색 순서대로 채움
+    if not failed:  # LLM 이 관련 있다고 고른 것만 쓴다 (무관한 후보로 채우거나 유형을 억지로 섞지 않음)
+        return picked, failed
+    for c in pool:  # LLM 호출 실패 시에만 검색 순서대로 채움
         if len(picked) >= TOP_N:
             break
         if c not in picked:
             picked.append(c)
-    for want_api in (True, False):  # API·파일 혼합 보장
+    for want_api in (True, False):  # 호출 실패 시 API·파일 혼합
         if picked and not any((c["list_type"] == "OPEN API") == want_api for c in picked):
             extra = next((c for c in pool if (c["list_type"] == "OPEN API") == want_api), None)
             if extra:

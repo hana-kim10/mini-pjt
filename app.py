@@ -108,6 +108,8 @@ body.has-results .chips,body.has-results .recent{justify-content:flex-start}
 @keyframes pulse{50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){.pending{animation:none}}
 .apicard{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--brown);border-radius:12px;padding:16px 20px;margin-bottom:10px}
+.apicard.is-api{border-color:var(--accent)}
+.apicard.is-file{border-color:var(--brown)}
 .apihead{display:flex;gap:8px;align-items:center;font-size:17px;font-weight:700;line-height:1.4}
 .apihead a{color:var(--text)}.apihead a:hover{color:var(--accent);text-decoration:underline}
 .apicard .reason{margin:8px 0 0;font-size:15px;line-height:1.7;color:var(--sub)}
@@ -157,7 +159,7 @@ function renderRecent(){const box=$("recent");box.textContent="";const r=recent(
 function saveRecent(t){try{const r=[t,...recent().filter(x=>x!==t)].slice(0,5);localStorage.setItem(KEY,JSON.stringify(r))}catch(e){}renderRecent()}
 function safeUrl(u){return /^https?:\/\//.test(u||"")?u:null}
 function card(x){
-  const isApi=x.list_type==="OPEN API",c=el("article","apicard"),h=el("div","apihead");
+  const isApi=x.list_type==="OPEN API",c=el("article","apicard "+(isApi?"is-api":"is-file")),h=el("div","apihead");
   h.append(el("span","badge"+(isApi?"":" k-file"),KIND[x.list_type]||"파일데이터"));
   const u=safeUrl(x.page_url);if(u){const a=el("a",null,x.display);a.href=u;a.target="_blank";a.rel="noopener";h.append(a)}else h.append(x.display);
   c.append(h,el("p","reason",x.summary),el("p","meta",[x.org_nm,"활용 "+Number(x.download_cnt||0).toLocaleString()+"건","ID "+x.id].join(" · ")));
@@ -176,7 +178,10 @@ function render(r){
   sc.append(s1);
   const list=$("apiOnly").checked?r.recommendations.filter(x=>x.list_type==="OPEN API"):r.recommendations;
   const s2=el("section","need"),h2=el("h2");h2.append(el("span","idx","2"),"추천 목록 ("+list.length+"건)");s2.append(h2);
-  if(list.length)list.forEach(x=>s2.append(card(x)));else s2.append(el("p","gap","해당 조건의 데이터가 없습니다."));
+  if(list.length)list.forEach(x=>s2.append(card(x)));
+  else s2.append(el("p","gap",$("apiOnly").checked&&r.recommendations.length
+    ?"이 주제는 오픈API가 없고 파일데이터만 있습니다. '오픈API만' 체크를 해제하면 파일데이터 "+r.recommendations.length+"건을 볼 수 있습니다."
+    :"해당 조건의 데이터가 없습니다."));
   rc.append(s2,el("p","foot","검색 방식 "+r.search_mode+" · 후보 중 상위 "+r.recommendations.length+"건"))}
 function show(data){
   $("scenarios").textContent="";$("recs").textContent="";
