@@ -1,17 +1,32 @@
 {
-  "top5_type_hit": 0.876,
+  "top5_type_hit": 0.886,
   "hallucinated": 0,
   "judge_avg": 4.58,
   "judge_runs": [
-    4.58,
+    4.59,
     4.58
   ],
   "reject_rate": 1.0,
-  "overall_pass": 0.84,
+  "overall_pass": 0.83,
   "n_cases": 100,
-  "n_passed": 84,
+  "n_passed": 83,
   "search_mode": "hybrid",
-  "note": "지역 처리 수정 후 코드로 측정. 100건 모두 같은 코드로 측정했고, 한도 때문에 키 2개·리전 3곳(us-east-1, us-west-2, ap-northeast-2)에 나눠 돌려 합친 값(코드·모델·채점 동일)",
+  "note": "지역 질문 결과 보정(구·군·시 기준 비교, 사본 대표를 사용자 질문 기준으로 재선택, 다른 지역 단독 데이터 제외) 후. 지역 질문 7건(2,24,26,27,31,91,95)만 새로 측정하고, 이 변경이 동작하지 않는 나머지 93건은 바로 아래 before_locality_filter 측정값을 그대로 썼다",
+  "before_locality_filter": {
+    "top5_type_hit": 0.876,
+    "hallucinated": 0,
+    "judge_avg": 4.58,
+    "judge_runs": [
+      4.58,
+      4.58
+    ],
+    "reject_rate": 1.0,
+    "overall_pass": 0.84,
+    "n_cases": 100,
+    "n_passed": 84,
+    "search_mode": "hybrid",
+    "note": "지역 처리 수정 후 코드로 측정. 100건 모두 같은 코드로 측정했고, 한도 때문에 키 2개·리전 3곳(us-east-1, us-west-2, ap-northeast-2)에 나눠 돌려 합친 값(코드·모델·채점 동일)"
+  },
   "before_region_fix": {
     "top5_type_hit": 0.838,
     "hallucinated": 0,

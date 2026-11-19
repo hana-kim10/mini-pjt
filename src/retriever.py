@@ -159,6 +159,29 @@ def extract_regions(question: str) -> list[str]:
     return found
 
 
+def specific_regions(regions: list[str]) -> list[str]:
+    """지역 목록에 구·군·시 이름이 있으면 그것만, 없으면 광역 지역을 그대로 돌려줍니다.
+
+    '부산 해운대구'에서 '부산'으로 비교하면 부산의 다른 구 데이터도 맞는 것으로 보기 때문입니다.
+    """
+    fine = [g for g in regions if g not in REGION_PREFIXES and not is_metro_org(g) and g in _district_names()]
+    return fine or regions
+
+
+@lru_cache(maxsize=1)
+def _district_names() -> frozenset[str]:
+    """포털 기관명에 실제로 나오는 구·군·시 이름 모음. '침수지구' 같은 낱말을 지역으로 오인하지 않기 위해 씁니다."""
+    names = set()
+    for org in _load_search_df()["org_nm"].dropna().astype(str).unique():
+        names.update(re.findall(r"[가-힣]+(?:시|군|구)(?![가-힣])", org))
+    return frozenset(names)
+
+
+def is_metro_org(org: str) -> bool:
+    """기관명이 광역 단위 지자체 자체(예: '서울특별시', '경기도')인지 판별합니다. 구·군·시 이름이 붙으면 아닙니다."""
+    return bool(re.fullmatch(r"[가-힣]+(?:특별시|광역시|특별자치시|특별자치도|도)", str(org or "").strip()))
+
+
 def group_by_type(rows: list[dict], question: str = "", limit: int = 10) -> list[dict]:
     """검색 결과를 데이터 유형별로 묶어 유형당 대표 하나만 남깁니다.
 
@@ -188,17 +211,28 @@ def group_by_type(rows: list[dict], question: str = "", limit: int = 10) -> list
             if not m.empty:
                 pick = m
                 # 질문에 구·군·시 이름이 있으면 광역 단위('서울특별시') 사본보다 그 지역 사본을 우선한다.
-                fine = [g for g in regions if g not in REGION_PREFIXES]
+                fine = [g for g in specific_regions(regions) if g not in REGION_PREFIXES]
                 m2 = m[m.apply(lambda x: any(g in str(x["org_nm"]) or g in str(x["title"]) for g in fine), axis=1)] if fine else m
                 if not m2.empty:
                     pick = m2
+                else:  # 그 구·군·시 사본이 없으면 같은 광역의 다른 구 사본 대신 광역 단위 사본, 그것도 없으면 전국 단위로 간다
+                    metro = m[m["org_nm"].map(is_metro_org)]
+                    pick = metro if not metro.empty else None
         if pick is None:
             nat = members[~local | members["title"].str.contains("전국", na=False)]
             pick = nat if not nat.empty else members
         rep = pick.sort_values("download_cnt", ascending=False).iloc[0].to_dict()
         name = _type_name(rep["title"], rep.get("org_nm", ""))
-        rep.update(group_name=name, copies=int(n_local),
-                   display=f"{name} (지자체 {n_local}곳)" if n_local >= 2 else rep["title"])
+        # 질문 지역과 맞는 사본을 대표로 골랐으면 그 제목을 보여 줘야 사용자가 어느 지역 데이터인지 안다.
+        region_hit = bool(regions) and any(g in str(rep["org_nm"]) or g in str(rep["title"])
+                                           for g in specific_regions(regions))
+        if n_local < 2:
+            display = rep["title"]
+        elif region_hit:
+            display = f"{rep['title']} (지자체 {n_local}곳 중)"
+        else:
+            display = f"{name} (지자체 {n_local}곳)"
+        rep.update(group_name=name, copies=int(n_local), display=display)
         for c in ("score",):
             if c in r:
                 rep[c] = r[c]

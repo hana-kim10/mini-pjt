@@ -23,8 +23,9 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from src.retriever import _load_search_df, extract_regions, search_mode
-from src.tools import get_domain_tools, search_candidates
+from src.retriever import (_is_local_org, _load_search_df, extract_regions, group_by_type, is_metro_org,
+                           search_mode, specific_regions)
+from src.tools import get_domain_tools, search_candidates, to_item
 
 load_dotenv()
 
@@ -294,6 +295,36 @@ def rerank(question: str, cands: list[dict], llm: Any) -> tuple[list[dict], bool
     return picked, failed
 
 
+def filter_locality(question: str, picked: list[dict]) -> list[dict]:
+    """질문에 지역이 있으면, 재선별 결과를 질문 지역에 맞춥니다.
+
+    - 사본 묶음('○○ (지자체 N곳)')은 사용자 질문 기준으로 대표를 다시 고릅니다.
+      (검색 도구는 LLM 이 넘긴 지역 인자로 대표를 골라 구·군·시가 빠질 수 있기 때문입니다.)
+    - 지자체 단독 데이터는 질문의 구·군·시(없으면 광역)와 맞거나, 같은 광역 단위 지자체 자체의 데이터만 남깁니다.
+    질문에 지역이 없으면 그대로 돌려줍니다. 다 빼면 목록이 비는 경우에도 원래 목록을 그대로 돌려줍니다.
+    빈자리를 다른 후보로 채우지 않습니다.
+    """
+    regions = extract_regions(question)
+    if not regions:
+        return picked
+    spec = specific_regions(regions)
+    df = _load_search_df()
+    kept = []
+    for c in picked:
+        if int(c.get("copies") or 0) >= 2:
+            row = df[df["id"].astype(str) == str(c["id"])]
+            regrouped = group_by_type([row.iloc[0].to_dict()], question, 1) if not row.empty else []
+            item = to_item(regrouped[0]) if regrouped else c
+            if item["id"] not in {k["id"] for k in kept}:  # 대표를 바꾼 결과가 이미 목록에 있으면 겹치지 않게 뺀다
+                kept.append(item)
+            continue
+        org, title = str(c.get("org_nm", "")), str(c.get("title", ""))
+        if (not _is_local_org(org) or any(g in org or g in title for g in spec)
+                or (is_metro_org(org) and any(g in org for g in regions))) and c["id"] not in {k["id"] for k in kept}:
+            kept.append(c)
+    return kept or picked
+
+
 def make_scenarios(question: str, recs: list[dict], llm: Any) -> tuple[list[dict], bool]:
     """추천 목록에 포함된 데이터만 근거로 활용 시나리오 1~2개를 만듭니다.
 
@@ -356,7 +387,7 @@ def run_agent(question: str, llm: Any = None) -> dict:
         return {"answer": SEARCH_ERROR_MESSAGE if search_failed else NO_ANSWER_MESSAGE, "contexts": [], "trace": trace}
 
     picked, rerank_failed = rerank(question, cands, llm)
-    recs = output_guard(picked)
+    recs = output_guard(filter_locality(question, picked))
     trace.append({"step": "rerank", "input": f"후보 {len(cands)}건",
                   "output": ("재선별 실패(검색 순서 사용): " if rerank_failed else "") + ", ".join(c["id"] for c in recs)})
     if not recs:
