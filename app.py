@@ -167,7 +167,7 @@ function card(x){
 function render(r){
   const sc=$("scenarios"),rc=$("recs");sc.textContent="";rc.textContent="";
   const s1=el("section","need"),h1=el("h2");h1.append(el("span","idx","1"),"활용 시나리오");s1.append(h1);
-  if(!r.scenarios.length)s1.append(el("p","gap","시나리오를 만들지 못했습니다. 아래 추천 목록을 확인하세요."));
+  if(!r.scenarios.length)s1.append(el("p","gap",r.scenario_notice||"시나리오를 만들지 못했습니다. 아래 추천 목록을 확인하세요."));
   r.scenarios.forEach(s=>{const c=el("div","summary");c.append(el("b",null,s.title),el("p",null,s.description));
     if(s.effect)c.append(el("b","eff","기대 효과"),el("p",null,s.effect));
     s1.append(c)});

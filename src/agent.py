@@ -83,6 +83,7 @@ REFUSAL_MESSAGES = {
     "guard_error": "일시적인 오류로 요청을 검사하지 못했습니다. 잠시 후 다시 시도해 주세요.",
 }
 NO_ANSWER_MESSAGE = "질문과 관련된 공공데이터를 포털에서 찾지 못했습니다. 다른 표현이나 키워드로 다시 물어봐 주세요."
+SCENARIO_ERROR_MESSAGE = "일시적인 오류로 활용 시나리오를 만들지 못했습니다. 잠시 후 다시 검색해 주세요. 추천 목록은 아래에서 확인할 수 있습니다."
 
 
 class GuardCheck(BaseModel):
@@ -275,8 +276,11 @@ def rerank(question: str, cands: list[dict], llm: Any) -> list[dict]:
     return picked
 
 
-def make_scenarios(question: str, recs: list[dict], llm: Any) -> list[dict]:
-    """추천 목록에 포함된 데이터만 근거로 활용 시나리오 1~2개를 만듭니다."""
+def make_scenarios(question: str, recs: list[dict], llm: Any) -> tuple[list[dict], bool]:
+    """추천 목록에 포함된 데이터만 근거로 활용 시나리오 1~2개를 만듭니다.
+
+    (시나리오 목록, 생성 실패 여부)를 돌려줍니다. LLM 호출이 실패(한도 초과·네트워크 오류 등)하면 빈 목록과 True 입니다.
+    """
     listing = "\n".join(
         f"{c['id']} | {'오픈API' if c['list_type'] == 'OPEN API' else '파일데이터'} | {c['display']} | {c['org_nm']} | "
         f"{c['summary']}" for c in recs)
@@ -292,17 +296,19 @@ def make_scenarios(question: str, recs: list[dict], llm: Any) -> list[dict]:
         "data_ids 에는 목록의 ID만 쓰세요. 질문이 실시간·잔여 좌석처럼 목록에 없는 성격의 데이터를 요구하면 "
         "그런 데이터는 추천 목록에 없다고 시나리오 설명에서 먼저 밝히고, 목록의 대체 데이터로 할 수 있는 일만 쓰세요."
     ) | build_llm(llm).with_structured_output(ScenarioSet)
+    failed = False
     try:
         out = chain.invoke({"q": question, "listing": listing}).scenarios[:2]
-    except Exception:
-        out = []
+    except Exception as e:  # 시나리오만 실패해도 추천 목록은 돌려주되, 실패 사실은 사용자에게 알립니다
+        print(f"[scenario] 시나리오 생성 실패: {type(e).__name__}: {str(e)[:150]}")
+        out, failed = [], True
     valid = {c["id"] for c in recs}
     scen = []
     for s in out:
         ids = [i for i in s.data_ids if i in valid]
         if ids and s.description.strip():
             scen.append({"title": s.title, "description": s.description, "effect": s.effect, "data_ids": ids})
-    return scen
+    return scen, failed
 
 
 def run_agent(question: str, llm: Any = None) -> dict:
@@ -334,11 +340,12 @@ def run_agent(question: str, llm: Any = None) -> dict:
     if not recs:
         trace.append({"step": "no_answer", "input": question, "output": "출력 가드 통과 항목 없음"})
         return {"answer": NO_ANSWER_MESSAGE, "contexts": [], "trace": trace}
-    scenarios = make_scenarios(question, recs, llm)
-    trace.append({"step": "scenario", "input": f"추천 {len(recs)}건", "output": f"시나리오 {len(scenarios)}개"})
+    scenarios, scenario_failed = make_scenarios(question, recs, llm)
+    trace.append({"step": "scenario", "input": f"추천 {len(recs)}건",
+                  "output": "생성 실패(LLM 호출 오류)" if scenario_failed else f"시나리오 {len(scenarios)}개"})
 
-    answer = json.dumps({"scenarios": scenarios, "recommendations": recs, "search_mode": search_mode()},
-                        ensure_ascii=False)
+    answer = json.dumps({"scenarios": scenarios, "scenario_notice": SCENARIO_ERROR_MESSAGE if scenario_failed else "",
+                         "recommendations": recs, "search_mode": search_mode()}, ensure_ascii=False)
     contexts = [{"doc_id": r["id"],
                  "text": f"{r['display']} [{r['list_type']}] {r['org_nm']} | {r['keywords']} | {r['summary']} | {r['page_url']}"}
                 for r in recs]
