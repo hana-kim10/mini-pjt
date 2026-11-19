@@ -1,0 +1,21 @@
+id,name,method,path,content_type,body,expected_status,note
+1,필드 없음,POST,/query,application/json,{},422,question 필드 누락
+2,question null,POST,/query,application/json,"{""question"":null}",422,
+3,빈 문자열,POST,/query,application/json,"{""question"":""""}",200|422,거절 안내 또는 검증 오류. 500이 아니면 통과
+4,공백만,POST,/query,application/json,"{""question"":""   ""}",200|422,거절 안내 또는 검증 오류. 500이 아니면 통과
+5,숫자,POST,/query,application/json,"{""question"":12345}",422,문자열이 아닌 값
+6,리스트,POST,/query,application/json,"{""question"":[""a"",""b""]}",422,문자열이 아닌 값
+7,객체,POST,/query,application/json,"{""question"":{""a"":1}}",422,문자열이 아닌 값
+8,불리언,POST,/query,application/json,"{""question"":true}",200|422,문자열로 변환될 수도 있음. 500이 아니면 통과
+9,잘못된 JSON,POST,/query,application/json,"{""question"": ",422,본문이 JSON이 아님
+10,text/plain 본문,POST,/query,text/plain,전기차 충전소,422,Content-Type 불일치
+11,본문 없음,POST,/query,application/json,,422,
+12,제어문자,POST,/query,application/json,"{""question"":""\u0000\u0007\u001b[31m""}",200|422,NUL·BEL·ESC 포함. 500이 아니면 통과
+13,따옴표·SQL 조각,POST,/query,application/json,"{""question"":""' OR 1=1; DROP TABLE portal;--""}",200,검색 쿼리에 그대로 쓰이지 않아야 함. 응답 세 키 유지
+14,이모지만,POST,/query,application/json,"{""question"":""🚗🔌⚡""}",200,응답 세 키 유지
+15,아주 긴 입력,POST,/query,application/json,"{""question"":""<가*5000>""}",200|413|422,러너가 <가*5000>을 '가' 5000자로 바꿔 보냄. 500이 아니면 통과
+16,알 수 없는 필드 추가,POST,/query,application/json,"{""question"":""전기차 충전소 위치"",""extra"":1}",200,추가 필드는 무시. 응답 세 키 유지
+17,앞뒤 공백·개행,POST,/query,application/json,"{""question"":""\n 전기차 충전소 위치 \n""}",200,응답 세 키 유지
+18,GET 호출,GET,/query,,,405,
+19,PUT 호출,PUT,/query,application/json,"{""question"":""전기차 충전소 위치""}",405,
+20,없는 경로,POST,/queries,application/json,"{""question"":""전기차 충전소 위치""}",404,

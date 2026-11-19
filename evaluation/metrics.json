@@ -1,14 +1,27 @@
 {
-  "top5_type_hit": 0.792,
+  "top5_type_hit": 0.887,
   "hallucinated": 0,
-  "judge_avg": 4.68,
+  "judge_avg": 4.55,
   "judge_runs": [
-    4.66,
-    4.69
+    4.55,
+    4.55
   ],
   "reject_rate": 1.0,
-  "overall_pass": 0.833,
-  "n_cases": 60,
-  "n_passed": 50,
-  "search_mode": "hybrid"
+  "overall_pass": 0.85,
+  "n_cases": 100,
+  "n_passed": 85,
+  "search_mode": "hybrid",
+  "keyword_only": {
+    "top5_type_hit": 0.809,
+    "hallucinated": 0,
+    "judge_avg": 4.47,
+    "judge_runs": [
+      4.45,
+      4.49
+    ],
+    "reject_rate": 1.0,
+    "overall_pass": 0.8,
+    "n_cases": 100,
+    "n_passed": 80
+  }
 }
