@@ -166,11 +166,12 @@ function card(x){
   return c}
 function render(r){
   const sc=$("scenarios"),rc=$("recs");sc.textContent="";rc.textContent="";
+  const titles={};r.recommendations.forEach(x=>titles[x.id]=x.display);
   const s1=el("section","need"),h1=el("h2");h1.append(el("span","idx","1"),"활용 시나리오");s1.append(h1);
   if(!r.scenarios.length)s1.append(el("p","gap",r.scenario_notice||"시나리오를 만들지 못했습니다. 아래 추천 목록을 확인하세요."));
   r.scenarios.forEach(s=>{const c=el("div","summary");c.append(el("b",null,s.title),el("p",null,s.description));
     if(s.effect)c.append(el("b","eff","기대 효과"),el("p",null,s.effect));
-    s1.append(c)});
+    c.append(el("p","meta",s.data_ids.map(i=>titles[i]?titles[i]+"("+i+")":i).join(", ")));s1.append(c)});
   sc.append(s1);
   const list=$("apiOnly").checked?r.recommendations.filter(x=>x.list_type==="OPEN API"):r.recommendations;
   const s2=el("section","need"),h2=el("h2");h2.append(el("span","idx","2"),"추천 목록 ("+list.length+"건)");s2.append(h2);
