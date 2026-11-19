@@ -94,4 +94,4 @@ curl -X POST http://127.0.0.1:8000/query -H "Content-Type: application/json" -d 
 - `src/agent.py` — 메인 에이전트 (`run_agent`) · 입력·출력 가드레일(`input_guard`·`output_guard`) · `FileTracer`(응답 trace 기록)
 - `src/retriever.py` — 키워드·하이브리드 검색 · 지자체 사본 묶기(`group_by_type`) · 경량 parquet 생성(`build_search_parquet`) · 벡터 인덱스 빌드(`build_index`)
 - `src/tools.py` — 포털 검색 · API 상세 조회 도구
-- `evaluation/` — `test_queries.csv`, `metrics.json`, 1·2차 리포트 (평가 실행기는 일회성이라 파일로 두지 않음)
+- `evaluation/` — `test_queries.csv`, `metrics.json`, 1·2차 리포트 (평가 실행기 `evaluation/run_eval_once.py`는 로컬 전용 일회성 스크립트라 깃에서 제외함)
