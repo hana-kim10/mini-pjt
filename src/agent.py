@@ -247,7 +247,8 @@ def collect_candidates(question: str, llm: Any, tracer: FileTracer, trace: list)
     except Exception as e:  # 에이전트 실패 시 직접 검색으로 대체하고, 실패 사실은 호출한 쪽에서 사용자에게 알립니다
         failed = True
         print(f"[search] 검색어 확장 실패: {type(e).__name__}: {str(e)[:150]}")
-        trace.append({"step": "agent_error", "input": question, "output": f"{type(e).__name__}: {str(e)[:200]}"})
+        # 예외 메시지 원문(AWS 요청 ID·내부 경로 등)은 서버 로그에만 남기고 응답 trace 에는 예외 종류만 담는다
+        trace.append({"step": "agent_error", "input": question, "output": type(e).__name__})
     if not cands:
         for it in search_candidates(question, question):
             cands.setdefault(it["id"], it)

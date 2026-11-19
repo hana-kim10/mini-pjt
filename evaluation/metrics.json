@@ -25,7 +25,7 @@
     "n_cases": 100,
     "n_passed": 84,
     "search_mode": "hybrid",
-    "note": "지역 처리 수정 후 코드로 측정. 100건 모두 같은 코드로 측정했고, 한도 때문에 키 2개·리전 3곳(us-east-1, us-west-2, ap-northeast-2)에 나눠 돌려 합친 값(코드·모델·채점 동일)"
+    "note": "지역 처리 수정 후 코드로 측정. 100건 모두 같은 코드로 측정했고, 한도 때문에 키 2개로 us-east-1·us-west-2에 나눠 돌려 합친 값(코드·모델·채점 동일). ap-northeast-2는 모델 ID가 맞지 않아 LLM 호출이 실패했고 정규식 차단 1건(#39)만 그 리전 결과"
   },
   "before_region_fix": {
     "top5_type_hit": 0.838,

@@ -9,10 +9,14 @@
 API 키는 코드에 쓰지 않고 .env 로 읽습니다. (공개 레포이므로 커밋 금지)
 """
 
+import base64
+import hashlib
+import re
+
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.agent import run_agent
 
@@ -22,8 +26,11 @@ load_dotenv()
 app = FastAPI(title="Mini PJT")
 
 
+MAX_QUESTION_LEN = 500  # 화면 입력창(maxlength)과 같은 값. 긴 입력으로 LLM 토큰 한도를 소진하지 않도록 서버에서도 막는다
+
+
 class QueryRequest(BaseModel):
-    question: str
+    question: str = Field(max_length=MAX_QUESTION_LEN)
 
 
 class Context(BaseModel):
@@ -210,14 +217,36 @@ const q0=new URLSearchParams(location.search).get("q");if(q0)go(q0);
 </script></body></html>"""
 
 
+# 화면의 인라인 스크립트만 실행되도록 그 해시를 CSP 에 넣는다 (XSS 로 끼워 넣은 스크립트는 실행되지 않음)
+_SCRIPT_HASH = base64.b64encode(hashlib.sha256(
+    re.search(r"<script>(.*?)</script>", INDEX_HTML, re.S).group(1).encode("utf-8")).digest()).decode()
+INDEX_CSP = ("default-src 'self'; "
+             f"script-src 'sha256-{_SCRIPT_HASH}'; "
+             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+             "font-src 'self' https://cdn.jsdelivr.net; "
+             "img-src 'self' data:; connect-src 'self'; "
+             "base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """모든 응답에 기본 보안 헤더(MIME 추측 금지·프레임 삽입 금지·리퍼러 최소화)를 붙입니다."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return response
+
+
 @app.get("/", response_class=HTMLResponse)
-def index() -> str:
-    """검색창·활용 시나리오 카드·추천 목록을 보여주는 웹 화면(HTML 한 장)을 돌려줍니다."""
-    return INDEX_HTML
+def index() -> HTMLResponse:
+    """검색창·활용 시나리오 카드·추천 목록을 보여주는 웹 화면(HTML 한 장)을 돌려줍니다. CSP 헤더를 함께 붙입니다."""
+    return HTMLResponse(INDEX_HTML, headers={"Content-Security-Policy": INDEX_CSP})
 
 
 @app.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest) -> QueryResponse:
+    """질문(question)을 받아 answer·contexts·trace 세 키로 답합니다. question 은 500자까지 받습니다."""
     # 실제 처리(guardrail → 검색/도구 → no_answer 판정 → 답변)는 src/agent.py 에 있습니다.
     # 여기서는 API 규약에 맞게 결과를 감싸기만 합니다.
     result = run_agent(req.question)

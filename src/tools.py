@@ -57,7 +57,8 @@ def search_portal(query: str, region: str = "") -> str:
     try:
         items = search_candidates(f"{query} {region}".strip(), f"{region} {query}")
     except Exception as e:  # 도구는 예외 대신 문자열로 오류를 알린다
-        return f"오류: {e}"
+        print(f"[tool] {type(e).__name__}: {str(e)[:150]}")  # 원문은 서버 로그에만
+        return f"오류: {type(e).__name__}"
     return json.dumps(items, ensure_ascii=False) if items else "결과 없음"
 
 
@@ -77,7 +78,8 @@ def get_api_detail(dataset_id: str) -> str:
             return f"오류: 오픈API 가 아닌 파일데이터입니다 ({dataset_id})"
         return json.dumps(item, ensure_ascii=False)
     except Exception as e:
-        return f"오류: {e}"
+        print(f"[tool] {type(e).__name__}: {str(e)[:150]}")  # 원문은 서버 로그에만
+        return f"오류: {type(e).__name__}"
 
 
 def get_domain_tools(llm: Any = None) -> list:

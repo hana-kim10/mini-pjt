@@ -8,4 +8,5 @@ langgraph>=1.0
 langchain-aws>=1.0  # ChatBedrockConverse
 chromadb>=1.0
 ragas>=0.3
+langchain-openai>=1.1.14  # ragas 가 끌어오는 의존성. 알려진 취약점(PYSEC-2026-76) 수정판 이상으로 고정
 duckdb>=1.0
