@@ -21,7 +21,7 @@ data/db/*.duckdb
 availableBedrock
 
 # 가드레일 차단 기록
-guard_audit.log
+data/logs/
 
 # 평가 실행기 (로컬 전용 일회성 스크립트)
 evaluation/run_eval_once.py

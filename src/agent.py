@@ -23,7 +23,7 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from src.retriever import (_is_local_org, _load_search_df, extract_regions, group_by_type, is_metro_org,
+from src.retriever import (ROOT, _is_local_org, _load_search_df, extract_regions, group_by_type, is_metro_org,
                            search_mode, specific_regions)
 from src.tools import get_domain_tools, search_candidates, to_item
 
@@ -32,6 +32,7 @@ load_dotenv()
 MAX_ATTEMPTS = 2   # 검색어 재확장 시도 상한
 MIN_CANDIDATES = 3  # 이보다 적으면 재확장
 TOP_N = 5          # 추천 목록 길이
+GUARD_AUDIT_LOG = ROOT / "data" / "logs" / "guard_audit.log"  # 가드 차단 기록 (실행 위치와 무관)
 
 # ---------------------------------------------------------------- 공통 헬퍼
 
@@ -131,9 +132,10 @@ def input_guard(text: str, llm: Any = None) -> tuple[bool, str]:
 
 
 def refusal_message(reason: str) -> str:
-    """고정 거절 문구를 돌려주고, 차단 사유는 guard_audit.log 에만 남깁니다 (사용자에게 노출 금지)."""
+    """고정 거절 문구를 돌려주고, 차단 사유는 data/logs/guard_audit.log 에만 남깁니다 (사용자에게 노출 금지)."""
     kind = "guard_error" if "검사 실패" in reason else "off_topic" if "범위 밖" in reason else "injection"
-    with open("guard_audit.log", "a", encoding="utf-8") as f:
+    GUARD_AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with open(GUARD_AUDIT_LOG, "a", encoding="utf-8") as f:
         f.write(f"{datetime.datetime.now().isoformat()}\t{kind}\t{reason}\n")
     return REFUSAL_MESSAGES[kind]
 
@@ -221,6 +223,7 @@ def collect_candidates(question: str, llm: Any, tracer: FileTracer, trace: list)
     """
     region = ", ".join(extract_regions(question))
     cands: dict[str, dict] = {}
+    batches: list[list[dict]] = []  # 검색어(도구 호출) 하나의 새 후보 묶음
     seen_titles: set[str] = set()
     failed = False
     try:
@@ -236,11 +239,15 @@ def collect_candidates(question: str, llm: Any, tracer: FileTracer, trace: list)
                     items = json.loads(get_text(m))
                 except (ValueError, TypeError):
                     continue
+                batch = []
                 for it in items if isinstance(items, list) else []:
                     key = it["display"].lower()
                     if it["id"] not in cands and key not in seen_titles:
                         cands[it["id"]] = it
                         seen_titles.add(key)
+                        batch.append(it)
+                if batch:
+                    batches.append(batch)
             trace.append({"step": f"search_attempt_{attempt}", "input": question, "output": f"후보 {len(cands)}건"})
             if len(cands) >= MIN_CANDIDATES:
                 break
@@ -253,7 +260,31 @@ def collect_candidates(question: str, llm: Any, tracer: FileTracer, trace: list)
         for it in search_candidates(question, question):
             cands.setdefault(it["id"], it)
         trace.append({"step": "keyword_fallback", "input": question, "output": f"후보 {len(cands)}건"})
-    return list(cands.values()), failed
+        return list(cands.values()), failed
+    return interleave(batches), failed
+
+
+def interleave(batches: list[list[dict]]) -> list[dict]:
+    """검색어별 후보 묶음을 한 건씩 번갈아 이어 붙입니다 (묶음 안 순서는 유지).
+
+    앞에서부터 잘라 쓰는 rerank 후보에 뒤쪽 검색어(다른 유형) 결과도 들어가게 하기 위함입니다.
+    """
+    out: list[dict] = []
+    for i in range(max((len(b) for b in batches), default=0)):
+        out += [b[i] for b in batches if i < len(b)]
+    return out
+
+
+def region_ok(c: dict, regions: list[str], spec: list[str]) -> bool:
+    """후보가 질문 지역에 맞는지 봅니다. 사본 묶음·지자체가 아닌 기관은 맞는 것으로 봅니다.
+
+    지자체 단독 데이터는 질문의 구·군·시(없으면 광역)와 맞거나, 같은 광역 단위 지자체 자체의 데이터만 맞습니다.
+    """
+    if int(c.get("copies") or 0) >= 2:
+        return True
+    org, title = str(c.get("org_nm", "")), str(c.get("title", ""))
+    return (not _is_local_org(org) or any(g in org or g in title for g in spec)
+            or (is_metro_org(org) and any(g in org for g in regions)))
 
 
 def rerank(question: str, cands: list[dict], llm: Any) -> tuple[list[dict], bool]:
@@ -261,8 +292,12 @@ def rerank(question: str, cands: list[dict], llm: Any) -> tuple[list[dict], bool
 
     (추천 목록, 재선별 실패 여부)를 돌려줍니다. 관련 없는 후보로 5건을 억지로 채우지 않습니다.
     LLM 호출이 실패했을 때만 검색 순서대로 채우고 유형을 섞습니다.
+    질문에 지역이 있으면 지역이 맞지 않는 지자체 단독 후보를 LLM 에 넘기기 전에 뺍니다 (다 빠지면 원래 후보 사용).
     """
-    pool = cands[:30]
+    regions = extract_regions(question)
+    spec = specific_regions(regions) if regions else []
+    local = [c for c in cands if region_ok(c, regions, spec)] if regions else cands
+    pool = (local or cands)[:30]
     listing = "\n".join(
         f"{c['id']} | {'API' if c['list_type'] == 'OPEN API' else '파일'} | {c['display']} | {c['org_nm']} | "
         f"{c['keywords']} | {c['summary'][:80]}" for c in pool)
@@ -319,9 +354,7 @@ def filter_locality(question: str, picked: list[dict]) -> list[dict]:
             if item["id"] not in {k["id"] for k in kept}:  # 대표를 바꾼 결과가 이미 목록에 있으면 겹치지 않게 뺀다
                 kept.append(item)
             continue
-        org, title = str(c.get("org_nm", "")), str(c.get("title", ""))
-        if (not _is_local_org(org) or any(g in org or g in title for g in spec)
-                or (is_metro_org(org) and any(g in org for g in regions))) and c["id"] not in {k["id"] for k in kept}:
+        if region_ok(c, regions, spec) and c["id"] not in {k["id"] for k in kept}:
             kept.append(c)
     return kept or picked
 
