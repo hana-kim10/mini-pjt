@@ -89,6 +89,7 @@ curl -X POST http://127.0.0.1:8000/query -H "Content-Type: application/json" -d 
 - 지역 질문 결과 보정 후 (2026-11-19, 하이브리드): 83 / 100 (0.83) · positive 45/60 · edge 9/11 · negative 7/7 · guardrail 22/22. 질문에 구·군·시가 있으면 그 이름으로만 비교하고, 사본 묶음의 대표를 사용자 질문 기준으로 다시 고르며, 다른 지역 지자체의 단독 데이터를 뺀다. 화면에도 '서울특별시 강남구_의원 인허가 정보 (지자체 17곳 중)'처럼 고른 지역 사본을 보여 준다. 이 변경은 지역 질문에서만 동작하므로 지역 질문 7건만 새로 쟀고 나머지 93건은 바로 위 측정값을 썼다. 84 → 83은 #24 한 건 차이(묶기 키가 다른 휴게음식점 데이터 두 줄)로 실행 간 흔들림 범위 안이고, 유형 적중률은 0.876 → 0.886으로 올랐다
 - rerank 후보 개선 후 재측정 (2026-11-20, 하이브리드, 100건): 87 / 100 (0.87) · positive 48/60 · edge 10/11 · negative 7/7 · guardrail 22/22. 에이전트가 만든 검색어별 결과를 한 건씩 번갈아 섞은 뒤 30건을 잘라 뒤쪽 검색어(다른 유형) 결과도 재선별 후보에 들어가게 했고, 질문 지역과 맞지 않는 지자체 단독 후보는 재선별 전에 뺐다. 100건 모두 새로 쟀다. 통과로 바뀐 8건(#1·2·25·68·78·86·93·95), 실패로 바뀐 4건(#8·10·11·64)이고, 같은 방식도 ±4건 흔들리므로 나빠지지 않았다는 수준으로 본다
 - rerank 모델 분리 후 재측정 (2026-11-20, 하이브리드, 100건): 87 / 100 (0.87) · positive 48/60 · edge 10/11 · negative 7/7 · guardrail 22/22. 재선별(rerank)만 Claude Haiku 4.5로 바꿨다(입력 가드·에이전트·시나리오는 Sonnet 4.5). 같은 조건 비교(us-east-1, 질문 5개 × 3회)에서 rerank 시간 중간값이 6.06초 → 0.88초로 줄었다. 통과로 바뀐 4건(#8·11·24·64), 실패로 바뀐 4건(#1·28·89·93)으로 합격 수는 같다. #28(파일데이터 위주 요청에 오픈API 포함)·#93(같은 종류 지자체 사본 2건)은 Haiku가 조건을 덜 지킨 사례다. 입력 가드는 Haiku가 정상 질문 2건(#31·#79)을 거절해 Sonnet을 유지했고, gpt-oss-20b는 가드에서 규칙 목록 요구(#57)를 통과시키고 rerank가 15회 중 5회 실패해 쓰지 않았다
+- 입력 가드·검색 동시 실행 (2026-11-20): 개인정보·빈 입력·정규식 검사를 먼저 하고, 가드 LLM과 검색 수집을 동시에 돌린다. 가드가 막으면 검색 결과는 쓰지도 trace 파일에 남기지도 않는다. 막아야 할 입력 29건 + 정상 질문 5건이 34/34 통과했고, 요청 전체 시간 중간값이 19.5초 → 16.6초로 줄었다(us-west-2, 변경 전 코드와 번갈아 질문 3개 × 2회). 대가로 정규식을 통과한 차단 대상 입력도 에이전트 LLM과 읽기 전용 검색 도구까지는 실행되어 그만큼 토큰을 쓴다
 - 모델 객체 재사용 (2026-11-20): 요청마다 단계별로 새로 만들던 Bedrock 모델 객체를 (모델, 리전)별로 한 번만 만들어 재사용한다. LLM 단계 하나에 약 0.6초(생성 0.36초 + 새 연결 비용), 요청 한 건에 약 2.4초가 준다(us-west-2, 12회 비교). 답의 내용은 바뀌지 않아 100건 평가는 다시 돌리지 않았다
 - 지표(하이브리드, rerank 모델 분리 후, 100건): top5_type_hit 0.886 · hallucinated 0 · judge_avg 4.66 · reject_rate 1.0 · overall_pass 0.87
 - 지표(하이브리드, rerank 후보 개선 후, 100건): top5_type_hit 0.881 · hallucinated 0 · judge_avg 4.57 · reject_rate 1.0 · overall_pass 0.87
@@ -106,7 +107,7 @@ curl -X POST http://127.0.0.1:8000/query -H "Content-Type: application/json" -d 
 
 ## 핵심 코드 위치
 - `app.py` — POST /query 진입점, 웹 화면
-- `src/agent.py` — 메인 에이전트 (`run_agent`) · 검색 수집(`collect_candidates`) · 검색어별 후보 섞기(`interleave`) · 재선별(`rerank`, 작은 모델 사용) · 모델 객체 생성·재사용(`build_llm`) · 지역 판정(`region_ok`) · 지역 맞춤(`filter_locality`) · 시나리오(`make_scenarios`) · 입력·출력 가드레일(`input_guard`·`output_guard`) · `FileTracer`(응답 trace 기록)
+- `src/agent.py` — 메인 에이전트 (`run_agent`) · 검색 수집(`collect_candidates`) · 검색어별 후보 섞기(`interleave`) · 재선별(`rerank`, 작은 모델 사용) · 모델 객체 생성·재사용(`build_llm`) · 지역 판정(`region_ok`) · 지역 맞춤(`filter_locality`) · 시나리오(`make_scenarios`) · 입력·출력 가드레일(`rule_guard`·`input_guard`·`output_guard`, 가드 LLM은 검색과 동시 실행) · `FileTracer`(응답 trace 기록)
 - `src/retriever.py` — 키워드·하이브리드 검색 · 지역 추출(`extract_regions`) · 지자체 사본 묶기(`group_by_type`) · 경량 parquet 생성(`build_search_parquet`) · 벡터 인덱스 빌드(`build_index`)
 - `src/tools.py` — 포털 검색 · API 상세 조회 도구
 - `evaluation/` — `test_queries.csv`, `metrics.json`, 1·2차 리포트 (평가 실행기 `evaluation/run_eval_once.py`는 로컬 전용 일회성 스크립트라 깃에서 제외함)

@@ -8,14 +8,14 @@
 
 `app.py`가 `run_agent(req.question)`를 `llm` 없이 부릅니다. 그래서 모든 단계가 `build_llm(None)`(`src/agent.py:48`)으로 **같은 모델**을 새로 만듭니다.
 
-| 단계 | 코드 위치 | 모델 | 설정 |
-|---|---|---|---|
-| 입력 가드 | `input_guard` `src/agent.py:122` | Claude Sonnet 4.5 | 구조화 출력 `GuardCheck` |
-| 에이전트: 검색어 확장 | `collect_candidates` `src/agent.py:229` (`create_agent`) | Claude Sonnet 4.5 | 도구 호출 |
-| 에이전트: 마무리("검색 완료") | 같은 에이전트 루프 | Claude Sonnet 4.5 | |
-| rerank | `rerank` `src/agent.py:277` | Claude Sonnet 4.5 | 구조화 출력 `Selection` |
-| 시나리오 생성 | `make_scenarios` `src/agent.py:350` | Claude Sonnet 4.5 | 구조화 출력 `ScenarioSet` |
-| (LLM 아님) 임베딩 | `src/retriever.py:247` | Titan Embed v2 (`amazon.titan-embed-text-v2:0`) | |
+| 단계                 | 코드 위치                                                    | 모델                                              | 설정                   |
+| ------------------ | -------------------------------------------------------- | ----------------------------------------------- | -------------------- |
+| 입력 가드              | `input_guard` `src/agent.py:122`                         | Claude Sonnet 4.5                               | 구조화 출력 `GuardCheck`  |
+| 에이전트: 검색어 확장       | `collect_candidates` `src/agent.py:229` (`create_agent`) | Claude Sonnet 4.5                               | 도구 호출                |
+| 에이전트: 마무리("검색 완료") | 같은 에이전트 루프                                               | Claude Sonnet 4.5                               |                      |
+| rerank             | `rerank` `src/agent.py:277`                              | Claude Sonnet 4.5                               | 구조화 출력 `Selection`   |
+| 시나리오 생성            | `make_scenarios` `src/agent.py:350`                      | Claude Sonnet 4.5                               | 구조화 출력 `ScenarioSet` |
+| (LLM 아님) 임베딩       | `src/retriever.py:247`                                   | Titan Embed v2 (`amazon.titan-embed-text-v2:0`) |                      |
 
 - 실제 값은 `.env`의 `BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0`, `BEDROCK_REGION=us-west-2`, `temperature=0`입니다.
 - 후보가 3건보다 적으면 에이전트를 다시 돕니다(`MAX_ATTEMPTS=2`). 이때 LLM 호출이 2번 더 늘어 최대 7번이 됩니다.
@@ -65,6 +65,8 @@
 > 모델 객체 재사용 ④ (2026-11-20): `build_llm`이 (모델, 리전)별 객체를 한 번만 만들어 재사용합니다(`_cached_llm`). us-west-2에서 같은 호출을 12번씩 번갈아 재 보니 생성 0.36초 + 호출 2.58초 → 호출 2.32초로, LLM 단계 하나에 약 0.6초(요청 한 건에 4단계, 약 2.4초)가 줄었습니다. 서버 전체 응답(질문 3개, 서버를 띄운 뒤 첫 요청 제외)은 평균 23.3초 → 19.7초였지만 1회씩이라 흔들림이 큽니다. 답의 내용은 바뀌지 않아 100건 평가는 다시 돌리지 않았습니다.
 >
 > 작은 모델 분리 (2026-11-20): rerank만 Claude Haiku 4.5로 바꿔 100건 재측정 87/100 → 87/100, rerank 시간 6.06초 → 0.88초(us-east-1 같은 조건 비교). 입력 가드는 Haiku가 정상 질문 2건을 거절해 Sonnet 유지 (채택). 상세는 `round2_report.md` 맨 아래 절.
+>
+> 입력 가드와 검색 동시 실행 (2026-11-20, `latency_profile.md` 2번): 개인정보·빈 입력·정규식 검사는 먼저 하고, 가드 LLM과 검색 수집만 동시에 실행합니다. 가드가 막으면 검색 결과는 쓰지도 기록하지도 않습니다. 막아야 할 입력 29건 + 정상 질문 5건 34/34 통과, 요청 전체 중간값 19.5초 → 16.6초(us-west-2, 질문 3개 × 2회). 상세는 `round2_report.md` 맨 아래 절.
 
 ## 3. 적용 순서 제안
 
