@@ -46,7 +46,11 @@ def search_candidates(query: str, question: str = "", per_kind: int = 6) -> list
     return items
 
 
-@tool
+# return_direct=True: 도구 실행 후 에이전트를 바로 끝내 마무리 LLM 호출('검색 완료' 응답, 약 1.4초)을 생략한다.
+# 필요하면 껐다 켤 수 있다. 에이전트가 검색 결과를 보고 도구를 다시 부르게 하려면 두 도구 모두 False(또는 @tool)로 되돌린다.
+# create_agent 는 한 번에 실행된 도구가 모두 return_direct 일 때만 종료하므로 두 도구의 값을 같게 맞춘다.
+# 비교(2026-11-20, 12건): 켜도 도구 호출 횟수·검색 실패는 같았고 검색 단계만 6.36→4.97초로 줄었다.
+@tool(return_direct=True)
 def search_portal(query: str, region: str = "") -> str:
     """공공데이터포털 전체(약 10만 건)에서 검색어로 오픈API·파일데이터 후보를 찾습니다.
 
@@ -62,7 +66,7 @@ def search_portal(query: str, region: str = "") -> str:
     return json.dumps(items, ensure_ascii=False) if items else "결과 없음"
 
 
-@tool
+@tool(return_direct=True)  # search_portal 과 같은 값으로 맞춘다 (위 주석 참고)
 def get_api_detail(dataset_id: str) -> str:
     """오픈API 데이터셋 ID 로 엔드포인트 주소·응답 형식·활용 승인 방식·오퍼레이션 수를 조회합니다.
 
