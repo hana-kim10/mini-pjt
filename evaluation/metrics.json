@@ -1,17 +1,32 @@
 {
-  "top5_type_hit": 0.881,
+  "top5_type_hit": 0.886,
   "hallucinated": 0,
-  "judge_avg": 4.57,
+  "judge_avg": 4.66,
   "judge_runs": [
-    4.58,
-    4.56
+    4.65,
+    4.66
   ],
   "reject_rate": 1.0,
   "overall_pass": 0.87,
   "n_cases": 100,
   "n_passed": 87,
   "search_mode": "hybrid",
-  "note": "rerank 후보 개선(검색어별 결과를 번갈아 섞은 뒤 30건 자르기, 지역이 맞지 않는 지자체 단독 후보를 rerank 전에 제외) 후. 100건 모두 이 코드로 새로 측정했고, 한도 때문에 키 2개로 us-east-1·us-west-2에 나눠 돌려 합친 값(코드·모델·채점 동일). ap-northeast-2는 모델 ID가 맞지 않아 그 리전 결과는 쓰지 않음(정규식 차단 1건 제외)",
+  "note": "재선별(rerank)만 Claude Haiku 4.5(BEDROCK_FAST_MODEL_ID)로 바꾼 뒤. 입력 가드·에이전트·시나리오·심판은 Sonnet 4.5 그대로. 100건 모두 새로 측정했고, 한도 때문에 키 1개로 us-east-1·us-west-2에 나눠 돌려 합친 값(코드·모델·채점 동일). ap-northeast-2는 모델 ID가 맞지 않아 결과 없음",
+  "before_fast_rerank": {
+    "top5_type_hit": 0.881,
+    "hallucinated": 0,
+    "judge_avg": 4.57,
+    "judge_runs": [
+      4.58,
+      4.56
+    ],
+    "reject_rate": 1.0,
+    "overall_pass": 0.87,
+    "n_cases": 100,
+    "n_passed": 87,
+    "search_mode": "hybrid",
+    "note": "rerank 후보 개선(검색어별 결과를 번갈아 섞은 뒤 30건 자르기, 지역이 맞지 않는 지자체 단독 후보를 rerank 전에 제외) 후. 100건 모두 이 코드로 새로 측정했고, 한도 때문에 키 2개로 us-east-1·us-west-2에 나눠 돌려 합친 값(코드·모델·채점 동일). ap-northeast-2는 모델 ID가 맞지 않아 그 리전 결과는 쓰지 않음(정규식 차단 1건 제외)"
+  },
   "before_rerank_pool_change": {
     "top5_type_hit": 0.886,
     "hallucinated": 0,

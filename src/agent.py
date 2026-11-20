@@ -15,6 +15,7 @@ import json
 import os
 import re
 import time
+from functools import lru_cache
 from typing import Any
 
 from dotenv import load_dotenv
@@ -45,21 +46,30 @@ def get_text(message: Any) -> str:
     return str(content)
 
 
-def build_llm(llm: Any = None) -> Any:
+def build_llm(llm: Any = None, fast: bool = False) -> Any:
     """LLM 객체를 돌려줍니다. llm 이 주어지면 그대로 씁니다 (주입).
 
     없으면 .env 의 BEDROCK_REGION·BEDROCK_MODEL_ID 로 Bedrock Claude Sonnet 4.5 를 만듭니다
     (값이 없으면 us-east-1 · us.anthropic.claude-sonnet-4-5-20250929-v1:0).
+    fast=True 이고 BEDROCK_FAST_MODEL_ID 가 있으면 그 작은 모델을 씁니다 (rerank 처럼 짧은 판단용).
+    리전은 BEDROCK_FAST_REGION, 없으면 BEDROCK_REGION 을 따릅니다.
     """
     if llm is not None:
         return llm
+    region = os.getenv("BEDROCK_REGION") or "us-east-1"
+    model = os.getenv("BEDROCK_MODEL_ID") or "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    if fast and os.getenv("BEDROCK_FAST_MODEL_ID"):
+        model = os.getenv("BEDROCK_FAST_MODEL_ID")
+        region = os.getenv("BEDROCK_FAST_REGION") or region
+    return _cached_llm(model, region)
+
+
+@lru_cache(maxsize=8)
+def _cached_llm(model: str, region: str) -> Any:
+    """(모델, 리전)별 Bedrock 모델 객체를 한 번만 만들어 재사용합니다 (요청마다 클라이언트·연결을 새로 만들지 않음)."""
     from langchain_aws import ChatBedrockConverse
 
-    return ChatBedrockConverse(
-        model=os.getenv("BEDROCK_MODEL_ID") or "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-        region_name=os.getenv("BEDROCK_REGION") or "us-east-1",
-        temperature=0,
-    )
+    return ChatBedrockConverse(model=model, region_name=region, temperature=0)
 
 
 # ---------------------------------------------------------------- 가드레일
@@ -307,7 +317,7 @@ def rerank(question: str, cands: list[dict], llm: Any) -> tuple[list[dict], bool
         "오픈API와 파일데이터가 모두 질문과 관련 있으면 둘 다 포함하세요. "
         "질문과 관련 없는 후보는 5개를 채우려고 고르지 말고, 관련 있는 것만 고르세요(관련 있는 후보가 없으면 빈 목록). "
         "후보에 있는 ID만 쓰세요."
-    ) | build_llm(llm).with_structured_output(Selection)
+    ) | build_llm(llm, fast=True).with_structured_output(Selection)
     failed = False
     try:
         ids = [str(i) for i in chain.invoke({"q": question, "listing": listing}).ids]
